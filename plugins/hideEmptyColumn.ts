@@ -34,13 +34,24 @@ export const hideEmptyColumn = definePowerUpsPlugin({
 		observeQuerySelector("#issues-table tr", (el) => {
 			const table = el.closest("table");
 
-			if (table) {
-				hideEmptyColumn(table);
+			if (!table) return;
 
-				return () => {
-					hideEmptyColumn(table);
-				};
-			}
+			hideEmptyColumn(table);
+
+			const observer = new MutationObserver(() => {
+				hideEmptyColumn(table);
+			});
+
+			observer.observe(el, {
+				childList: true,
+				subtree: true,
+				characterData: true,
+			});
+
+			return () => {
+				observer.disconnect();
+				hideEmptyColumn(table);
+			};
 		});
 	},
 });
