@@ -59,7 +59,7 @@ export const searchKeyboard = definePowerUpsPlugin({
 					return;
 				}
 
-				if (e.key === "Enter") {
+				if (e.key === "Enter" && !e.isComposing) {
 					e.preventDefault();
 					e.stopPropagation();
 
