@@ -29,7 +29,12 @@ export const createSelectField = ({ label, defaultValue, options }: Props) => {
 	const template = document.createElement("template");
 	template.innerHTML = htmlString;
 
-	const select = template.content.querySelector("select")!;
+	const select = template.content.querySelector("select");
+
+	if (!select) {
+		throw new Error("No select element found");
+	}
+
 	const element = template.content.firstElementChild as
 		| HTMLDivElement
 		| HTMLLIElement;
