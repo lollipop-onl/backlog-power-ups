@@ -7,7 +7,19 @@ export const nodeMatcher = <T extends HTMLElement>(
 		return [];
 	}
 
-	return Array.from(node.ownerDocument.querySelectorAll(selector))
-		.filter((el): el is T => el instanceof elementType)
-		.filter((el) => node.contains(el));
+	const results: T[] = [];
+
+	if (node.matches(selector) && node instanceof elementType) {
+		results.push(node as T);
+	}
+
+	const descendants = node.querySelectorAll(selector);
+	for (let i = 0; i < descendants.length; i++) {
+		const el = descendants[i];
+		if (el instanceof elementType) {
+			results.push(el as T);
+		}
+	}
+
+	return results;
 };

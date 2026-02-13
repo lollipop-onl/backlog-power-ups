@@ -16,39 +16,91 @@ const handlersMap: Map<
 	}
 > = new Map();
 
-const observer = new MutationObserver((mutations) => {
+// Cache minimatch results per pathname to avoid repeated pattern matching
+let cachedPathname: string | undefined;
+let cachedMatchResults: Map<string, boolean> = new Map();
+
+const isPathnameMatched = (matches: string[]): boolean => {
+	const { pathname } = location;
+
+	if (pathname !== cachedPathname) {
+		cachedPathname = pathname;
+		cachedMatchResults = new Map();
+	}
+
+	return matches.some((match) => {
+		let result = cachedMatchResults.get(match);
+		if (result === undefined) {
+			result = minimatch(pathname, match);
+			cachedMatchResults.set(match, result);
+		}
+		return result;
+	});
+};
+
+// Batch pending mutations and process them in a microtask
+let pendingMutations: MutationRecord[] = [];
+let isBatchScheduled = false;
+
+const processBatch = () => {
+	isBatchScheduled = false;
+
+	const mutations = pendingMutations;
+	pendingMutations = [];
+
+	// Collect all added and removed nodes across the batch
+	const addedNodes: Node[] = [];
+	let hasRemovals = false;
+
 	for (const mutation of mutations) {
-		if (mutation.type === "childList") {
-			for (const [
-				handler,
-				{ selector, elementsMap, matches = [] },
-			] of handlersMap) {
-				const isMatched = matches.some((match) =>
-					minimatch(location.pathname, match),
-				);
+		if (mutation.type !== "childList") continue;
 
-				if (isMatched) {
-					for (const node of mutation.addedNodes) {
-						for (const el of nodeMatcher(selector, node)) {
-							const invalidate = handler(el);
+		for (let i = 0; i < mutation.addedNodes.length; i++) {
+			addedNodes.push(mutation.addedNodes[i]);
+		}
 
-							if (typeof invalidate === "function") {
-								elementsMap.set(el, invalidate);
-							}
-						}
-					}
-				}
+		if (mutation.removedNodes.length > 0) {
+			hasRemovals = true;
+		}
+	}
 
-				if (mutation.removedNodes.length > 0) {
-					for (const [el, invalidate] of elementsMap) {
-						if (!el.isConnected) {
-							invalidate?.();
-							elementsMap.delete(el);
-						}
+	// Nothing to process
+	if (addedNodes.length === 0 && !hasRemovals) return;
+
+	for (const [handler, { selector, elementsMap, matches = [] }] of handlersMap) {
+		if (addedNodes.length > 0 && isPathnameMatched(matches)) {
+			for (const node of addedNodes) {
+				for (const el of nodeMatcher(selector, node)) {
+					if (elementsMap.has(el)) continue;
+
+					const invalidate = handler(el);
+
+					if (typeof invalidate === "function") {
+						elementsMap.set(el, invalidate);
 					}
 				}
 			}
 		}
+
+		if (hasRemovals) {
+			for (const [el, invalidate] of elementsMap) {
+				if (!el.isConnected) {
+					invalidate?.();
+					elementsMap.delete(el);
+				}
+			}
+		}
+	}
+};
+
+const observer = new MutationObserver((mutations) => {
+	for (const mutation of mutations) {
+		pendingMutations.push(mutation);
+	}
+
+	if (!isBatchScheduled) {
+		isBatchScheduled = true;
+		queueMicrotask(processBatch);
 	}
 });
 
