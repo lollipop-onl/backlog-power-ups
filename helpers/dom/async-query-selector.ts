@@ -41,14 +41,7 @@ export const asyncQuerySelector = (
 						}
 					}
 
-					for (const node of mutation.removedNodes) {
-						for (const el of nodeMatcher(selector, node)) {
-							clearTimeout(timer);
-							resolve(el);
-							return;
-						}
 					}
-				}
 			}
 		});
 
